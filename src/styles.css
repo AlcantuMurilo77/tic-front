@@ -32,6 +32,16 @@
   --overlay: rgba(238, 227, 207, .96);
 }
 
+:root[data-theme="purple"] {
+  --ink: #eee7ff;
+  --muted: #9c8dbd;
+  --surface: #120a1f;
+  --line: #493066;
+  --green: #c084fc;
+  --danger: #fb7185;
+  --overlay: rgba(18, 10, 31, .96);
+}
+
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; background: var(--surface); }
 body { margin: 0; min-width: 320px; min-height: 100vh; }

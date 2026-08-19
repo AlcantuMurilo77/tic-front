@@ -1,11 +1,27 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
-type Theme = 'dark' | 'terminal' | 'light'
+type Theme = 'dark' | 'terminal' | 'light' | 'purple'
+
+declare global {
+  interface Window {
+    roxo: () => string
+  }
+}
 
 const savedTheme = localStorage.getItem('tic:theme')
-const theme = ref<Theme>(savedTheme === 'terminal' || savedTheme === 'light' ? savedTheme : 'dark')
+const availableThemes: Theme[] = ['dark', 'terminal', 'light', 'purple']
+const theme = ref<Theme>(availableThemes.includes(savedTheme as Theme) ? savedTheme as Theme : 'dark')
+
+window.roxo = () => {
+  theme.value = 'purple'
+  return 'tema roxo ativado \uD83D\uDC7E'
+}
+
+onBeforeUnmount(() => {
+  delete (window as Partial<Window>).roxo
+})
 
 watch(theme, (value) => {
   document.documentElement.dataset.theme = value
