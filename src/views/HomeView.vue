@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppNotice from '../components/AppNotice.vue'
 import { createUser } from '../lib/api'
 import { getStoredUser, storeUser } from '../lib/storage'
 
 const router = useRouter()
+const route = useRoute()
 const name = ref('')
 const country = ref('BR')
 const loading = ref(false)
 const error = ref('')
 const existingUser = ref(getStoredUser())
 const valid = computed(() => name.value.trim().length >= 2 && country.value.trim().length === 2)
+
+function destinationAfterLogin(): string {
+  const redirect = route.query.redirect
+
+  // Only honor local paths so the query parameter cannot redirect users to
+  // another site after they create a player.
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+    ? redirect
+    : '/lobby'
+}
 
 onMounted(() => { if (existingUser.value) name.value = existingUser.value.name })
 
@@ -22,7 +33,7 @@ async function submit() {
   try {
     const user = await createUser({ name: name.value.trim(), country: country.value.trim().toUpperCase(), xman: true })
     storeUser(user)
-    await router.push('/lobby')
+    await router.push(destinationAfterLogin())
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Não foi possível criar seu jogador.'
   } finally {
@@ -30,7 +41,7 @@ async function submit() {
   }
 }
 
-function continueSession() { router.push('/lobby') }
+function continueSession() { router.push(destinationAfterLogin()) }
 </script>
 
 <template>

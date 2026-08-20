@@ -25,8 +25,9 @@ let socket: GameSocket | null = null
 const emptyBoard: Board = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
 const isParticipant = computed(() => !!user && !!game.value && [game.value.user_x, game.value.user_o].includes(user.id))
 const isWaiting = computed(() => !game.value || game.value.status === 'waiting' || game.value.user_o === ZERO_UUID)
-const hasWinner = computed(() => !!game.value?.winner_id && game.value.winner_id !== ZERO_UUID)
-const isEnded = computed(() => hasWinner.value || ['finished', 'ended', 'completed'].includes(game.value?.status || ''))
+const isEnded = computed(() => game.value?.status === 'finished')
+const isDraw = computed(() => isEnded.value && game.value?.winner_id === ZERO_UUID)
+const hasWinner = computed(() => isEnded.value && !!game.value?.winner_id && game.value.winner_id !== ZERO_UUID)
 const isMyTurn = computed(() => !!user && game.value?.current_turn === user.id)
 const myMark = computed(() => game.value?.user_x === user?.id ? 'X' : 'O')
 const xName = computed(() => game.value?.player_x?.name || game.value?.user_x_name || (game.value?.user_x === user?.id ? user?.name : '') || 'Jogador X')
@@ -36,7 +37,8 @@ const didIWin = computed(() => game.value?.winner_id === user?.id)
 const inviteUrl = computed(() => `${window.location.origin}/game/${gameId}`)
 const statusText = computed(() => {
   if (!socketConnected.value) return 'Conectando…'
-  if (isEnded.value) return hasWinner.value ? 'Partida encerrada' : 'Empate'
+  if (isDraw.value) return 'Empate'
+  if (hasWinner.value) return 'Partida encerrada'
   return isMyTurn.value ? 'Sua vez de jogar' : `Vez de ${game.value?.current_turn === game.value?.user_x ? xName.value : oName.value}`
 })
 
@@ -168,9 +170,9 @@ function goLobby() {
     <div v-if="game && isEnded" class="result-overlay">
       <article class="result-modal">
         <button class="result-close" aria-label="Fechar resultado" @click="goLobby">×</button>
-        <div class="result-symbol" :class="{ loss: hasWinner && !didIWin }">{{ !hasWinner ? '＝' : didIWin ? '✦' : '×' }}</div>
+        <div class="result-symbol" :class="{ loss: hasWinner && !didIWin }">{{ isDraw ? '＝' : didIWin ? '✦' : '×' }}</div>
         <p class="eyebrow">PARTIDA ENCERRADA</p>
-        <h2 v-if="!hasWinner">Deu velha!</h2>
+        <h2 v-if="isDraw">Deu velha!</h2>
         <h2 v-else-if="didIWin">Você venceu!</h2>
         <h2 v-else>Vitória de {{ winnerName }}</h2>
         <p v-if="hasWinner">{{ winnerName }} completou a partida como campeão.</p>
