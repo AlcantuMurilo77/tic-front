@@ -21,6 +21,8 @@ const movePending = ref(false)
 const error = ref('')
 const copied = ref(false)
 let socket: GameSocket | null = null
+let wasPageHidden = document.visibilityState === 'hidden'
+let lastResumeAt = 0
 
 const emptyBoard: Board = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
 const isParticipant = computed(() => !!user && !!game.value && [game.value.user_x, game.value.user_o].includes(user.id))
@@ -50,11 +52,44 @@ onMounted(() => {
 
   // Keep the creator connected as soon as the room exists, including after F5.
   if (game.value && isParticipant.value) connect()
+
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('pageshow', handlePageShow)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('pageshow', handlePageShow)
   socket?.close()
 })
+
+function resumeConnection() {
+  if (!user || !game.value || !isParticipant.value) return
+  const now = Date.now()
+  if (now - lastResumeAt < 500) return
+  lastResumeAt = now
+
+  if (socket) socket.reconnect()
+  else connect()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    wasPageHidden = true
+    return
+  }
+
+  if (wasPageHidden) {
+    wasPageHidden = false
+    resumeConnection()
+  }
+}
+
+function handlePageShow(event: PageTransitionEvent) {
+  // iOS can restore the page from its back-forward cache without creating a
+  // new component, leaving the previous WebSocket stale.
+  if (event.persisted) resumeConnection()
+}
 
 function connect() {
   if (!user || socket) return
