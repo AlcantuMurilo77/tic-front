@@ -1,4 +1,4 @@
-import type { Game, User } from '../types/game'
+import type { Game, RematchRequest, User } from '../types/game'
 
 const API_URL = (
   import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8080' : window.location.origin)
@@ -16,8 +16,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { error?: string; message?: string } | null
-    throw new Error(payload?.error || payload?.message || `O servidor respondeu com erro ${response.status}.`)
+    const body = await response.text().catch(() => '')
+    let message = body.trim()
+    try {
+      const payload = JSON.parse(body) as { error?: string; message?: string }
+      message = payload.error || payload.message || message
+    } catch {
+      // The API is allowed to return plain text errors.
+    }
+    throw new Error(message || `O servidor respondeu com erro ${response.status}.`)
   }
 
   return response.json() as Promise<T>
@@ -35,5 +42,19 @@ export function joinGame(gameId: string, userId: string): Promise<Game> {
   return request(`/games/join?game_id=${encodeURIComponent(gameId)}`, {
     method: 'POST',
     body: JSON.stringify({ user_id: userId }),
+  })
+}
+
+export function requestRematch(gameId: string, playerId: string): Promise<RematchRequest> {
+  return request(`/games/rematch?game_id=${encodeURIComponent(gameId)}`, {
+    method: 'POST',
+    body: JSON.stringify({ player_id: playerId }),
+  })
+}
+
+export function acceptRematch(rematchId: string, playerId: string): Promise<Game> {
+  return request(`/games/rematch/accept?rematch_id=${encodeURIComponent(rematchId)}`, {
+    method: 'POST',
+    body: JSON.stringify({ player_id: playerId }),
   })
 }

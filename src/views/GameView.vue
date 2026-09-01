@@ -1,28 +1,35 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppNotice from '../components/AppNotice.vue'
 import GameBoard from '../components/GameBoard.vue'
 import PlayerCard from '../components/PlayerCard.vue'
-import { joinGame } from '../lib/api'
+import { acceptRematch, joinGame, requestRematch } from '../lib/api'
 import { GameSocket } from '../lib/websocket'
 import { getStoredGame, getStoredUser, storeGame } from '../lib/storage'
-import type { Board, Game } from '../types/game'
+import type { Board, Game, RematchRequest } from '../types/game'
 import { ZERO_UUID } from '../types/game'
 
 const route = useRoute()
 const router = useRouter()
-const gameId = String(route.params.gameId)
+const activeGameId = ref(String(route.params.gameId))
 const user = getStoredUser()
-const game = ref<Game | null>(getStoredGame(gameId))
+const game = ref<Game | null>(getStoredGame(activeGameId.value))
 const socketConnected = ref(false)
 const joining = ref(false)
 const movePending = ref(false)
 const error = ref('')
 const copied = ref(false)
+const rematch = ref<RematchRequest | null>(null)
+const rematchLoading = ref(false)
+const rematchDeclined = ref(false)
 let socket: GameSocket | null = null
+let destroyed = false
 let wasPageHidden = document.visibilityState === 'hidden'
 let lastResumeAt = 0
+const seenRematchRequestIds = new Set<string>()
+const seenRematchGameIds = new Set<string>()
+const transitioningGameIds = new Set<string>()
 
 const emptyBoard: Board = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
 const isParticipant = computed(() => !!user && !!game.value && [game.value.user_x, game.value.user_o].includes(user.id))
@@ -36,12 +43,30 @@ const xName = computed(() => game.value?.player_x?.name || game.value?.user_x_na
 const oName = computed(() => game.value?.player_o?.name || game.value?.user_o_name || (game.value?.user_o === user?.id ? user?.name : '') || 'Jogador O')
 const winnerName = computed(() => game.value?.winner_id === game.value?.user_x ? xName.value : oName.value)
 const didIWin = computed(() => game.value?.winner_id === user?.id)
-const inviteUrl = computed(() => `${window.location.origin}/game/${gameId}`)
+const inviteUrl = computed(() => `${window.location.origin}/game/${activeGameId.value}`)
+const isOwnPendingRematch = computed(() => rematch.value?.status === 'pending' && rematch.value.requested_by_player_id === user?.id)
+const isIncomingRematch = computed(() => rematch.value?.status === 'pending' && rematch.value.requested_by_player_id !== user?.id && !rematchDeclined.value)
 const statusText = computed(() => {
   if (!socketConnected.value) return 'Conectando…'
   if (isDraw.value) return 'Empate'
   if (hasWinner.value) return 'Partida encerrada'
   return isMyTurn.value ? 'Sua vez de jogar' : `Vez de ${game.value?.current_turn === game.value?.user_x ? xName.value : oName.value}`
+})
+
+watch(() => route.params.gameId, (value) => {
+  const routeGameId = String(value)
+  if (routeGameId === activeGameId.value) return
+  closeSocket()
+  activeGameId.value = routeGameId
+  game.value = getStoredGame(routeGameId)
+  rematch.value = null
+  rematchDeclined.value = false
+  rematchLoading.value = false
+  movePending.value = false
+  joining.value = false
+  error.value = ''
+  copied.value = false
+  if (game.value && isParticipant.value) connect()
 })
 
 onMounted(() => {
@@ -58,9 +83,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  destroyed = true
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('pageshow', handlePageShow)
-  socket?.close()
+  closeSocket()
 })
 
 function resumeConnection() {
@@ -93,8 +119,10 @@ function handlePageShow(event: PageTransitionEvent) {
 
 function connect() {
   if (!user || socket) return
-  socket = new GameSocket(gameId, user.id, {
+  const connectedGameId = activeGameId.value
+  const nextSocket = new GameSocket(connectedGameId, user.id, {
     onGame: (updated) => {
+      if (activeGameId.value !== connectedGameId || socket !== nextSocket) return
       // Some websocket implementations send a compact game update. Preserve
       // fields from the create/join response while applying the server update.
       const nextGame = game.value ? { ...game.value, ...updated } : updated
@@ -103,13 +131,32 @@ function connect() {
       movePending.value = false
       error.value = ''
     },
+    onRematchRequested: (requested) => {
+      if (activeGameId.value !== connectedGameId || socket !== nextSocket) return
+      applyRematchRequest(requested)
+    },
+    onRematchAccepted: (newGame) => {
+      if (activeGameId.value !== connectedGameId || socket !== nextSocket) return
+      void enterNewGame(newGame)
+    },
     onError: (message) => {
+      if (socket !== nextSocket) return
       error.value = message
       movePending.value = false
     },
-    onStatus: (connected) => { socketConnected.value = connected },
+    onStatus: (connected) => {
+      if (socket === nextSocket) socketConnected.value = connected
+    },
   })
-  socket.connect()
+  socket = nextSocket
+  nextSocket.connect()
+}
+
+function closeSocket() {
+  const previous = socket
+  socket = null
+  socketConnected.value = false
+  previous?.close()
 }
 
 async function join() {
@@ -117,7 +164,7 @@ async function join() {
   joining.value = true
   error.value = ''
   try {
-    const joined = await joinGame(gameId, user.id)
+    const joined = await joinGame(activeGameId.value, user.id)
     game.value = joined
     storeGame(joined)
     connect()
@@ -129,7 +176,7 @@ async function join() {
 function play(row: number, col: number) {
   if (!user || !game.value || !isMyTurn.value || movePending.value || isEnded.value) return
   error.value = ''
-  if (socket?.sendMove({ game_id: gameId, player_id: user.id, row, col })) movePending.value = true
+  if (socket?.sendMove({ game_id: activeGameId.value, player_id: user.id, row, col })) movePending.value = true
 }
 
 async function copyInvite() {
@@ -141,8 +188,81 @@ async function copyInvite() {
 }
 
 function goLobby() {
-  socket?.close()
+  closeSocket()
   router.push('/lobby')
+}
+
+function friendlyRematchError(cause: unknown, fallback: string) {
+  console.error('[tic/rematch]', cause)
+  error.value = fallback
+}
+
+function applyRematchRequest(requested: RematchRequest) {
+  if (seenRematchRequestIds.has(requested.id)) return
+  seenRematchRequestIds.add(requested.id)
+  rematch.value = requested
+  rematchDeclined.value = false
+}
+
+async function askForRematch() {
+  if (!user || !game.value || !isEnded.value || rematchLoading.value) return
+  const originalGameId = activeGameId.value
+  rematchLoading.value = true
+  rematchDeclined.value = false
+  error.value = ''
+  try {
+    const current = await requestRematch(originalGameId, user.id)
+    if (destroyed || activeGameId.value !== originalGameId) return
+    applyRematchRequest(current)
+  } catch (cause) {
+    if (!destroyed && activeGameId.value === originalGameId) {
+      friendlyRematchError(cause, 'Não foi possível solicitar a revanche. Tente novamente.')
+    }
+  } finally {
+    if (!destroyed && activeGameId.value === originalGameId) rematchLoading.value = false
+  }
+}
+
+async function acceptCurrentRematch() {
+  if (!user || !rematch.value || rematchLoading.value || rematch.value.requested_by_player_id === user.id) return
+  const originalGameId = activeGameId.value
+  const rematchId = rematch.value.id
+  rematchLoading.value = true
+  error.value = ''
+  try {
+    const newGame = await acceptRematch(rematchId, user.id)
+    if (destroyed || activeGameId.value !== originalGameId) return
+    await enterNewGame(newGame)
+  } catch (cause) {
+    if (!destroyed && activeGameId.value === originalGameId) {
+      friendlyRematchError(cause, 'Não foi possível aceitar a revanche. Tente novamente.')
+    }
+  } finally {
+    if (!destroyed && activeGameId.value === originalGameId) rematchLoading.value = false
+  }
+}
+
+async function enterNewGame(newGame: Game) {
+  if (seenRematchGameIds.has(newGame.id) || transitioningGameIds.has(newGame.id) || activeGameId.value === newGame.id) return
+  seenRematchGameIds.add(newGame.id)
+  transitioningGameIds.add(newGame.id)
+  closeSocket()
+  activeGameId.value = newGame.id
+  game.value = newGame
+  storeGame(newGame)
+  rematch.value = null
+  rematchDeclined.value = false
+  rematchLoading.value = false
+  movePending.value = false
+  joining.value = false
+  error.value = ''
+  copied.value = false
+  try {
+    await router.push(`/game/${encodeURIComponent(newGame.id)}`)
+    if (!destroyed) connect()
+  } finally {
+    transitioningGameIds.delete(newGame.id)
+  }
 }
 </script>
 
@@ -150,7 +270,7 @@ function goLobby() {
   <section v-if="user" class="game-page page-narrow">
     <div class="game-topbar">
       <button class="back-button" @click="goLobby">← <span>Lobby</span></button>
-      <div class="room-code"><small>SALA</small><strong>{{ gameId.slice(0, 8) }}</strong></div>
+      <div class="room-code"><small>SALA</small><strong>{{ activeGameId.slice(0, 8) }}</strong></div>
       <span class="connection" :class="{ online: socketConnected }"><i></i>{{ socketConnected ? 'ao vivo' : 'offline' }}</span>
     </div>
 
@@ -170,7 +290,7 @@ function goLobby() {
           <input id="invite-link" :value="inviteUrl" readonly @focus="($event.target as HTMLInputElement).select()" />
           <button @click="copyInvite">{{ copied ? 'Copiado ✓' : 'Copiar' }}</button>
         </div>
-        <div class="code-display"><small>OU ENVIE O CÓDIGO</small><strong>{{ gameId }}</strong></div>
+        <div class="code-display"><small>OU ENVIE O CÓDIGO</small><strong>{{ activeGameId }}</strong></div>
       </article>
 
       <article v-else class="panel waiting-card join-card">
@@ -212,11 +332,30 @@ function goLobby() {
         <h2 v-else>Vitória de {{ winnerName }}</h2>
         <p v-if="hasWinner">{{ winnerName }} completou a partida como campeão.</p>
         <p v-else>Ninguém levou essa. Uma revanche resolve?</p>
+        <AppNotice v-if="error" :message="error" kind="error" />
         <div class="result-players">
           <span :class="{ champion: game.winner_id === game.user_x }">× {{ xName }}</span>
           <span :class="{ champion: game.winner_id === game.user_o }">○ {{ oName }}</span>
         </div>
-        <button class="primary-button" @click="goLobby">Voltar ao lobby <span>→</span></button>
+        <div v-if="isOwnPendingRematch" class="rematch-status" role="status">
+          <span class="rematch-pulse"></span>
+          Aguardando o adversário aceitar...
+        </div>
+        <div v-else-if="isIncomingRematch" class="rematch-confirmation">
+          <p>Seu adversário quer jogar outra partida.</p>
+          <div class="rematch-actions">
+            <button class="primary-button" :disabled="rematchLoading" @click="acceptCurrentRematch">
+              {{ rematchLoading ? 'Aceitando…' : 'Aceitar revanche' }} <span>→</span>
+            </button>
+            <button class="text-button" :disabled="rematchLoading" @click="rematchDeclined = true">Agora não</button>
+          </div>
+        </div>
+        <div v-else class="result-actions">
+          <button class="primary-button" :disabled="rematchLoading" @click="askForRematch">
+            {{ rematchLoading ? 'Solicitando…' : 'Jogar novamente' }} <span>↻</span>
+          </button>
+          <button class="text-button" @click="goLobby">Voltar ao lobby</button>
+        </div>
       </article>
     </div>
   </section>

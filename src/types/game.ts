@@ -22,7 +22,31 @@ export interface Game {
   user_o_name?: string
   player_x?: User
   player_o?: User
+  rematch_of_game_id?: string
 }
+
+export interface RematchRequest {
+  id: string
+  original_game_id: string
+  requested_by_player_id: string
+  status: 'pending' | 'accepted'
+  accepted_by_player_id?: string
+  new_game_id?: string
+  created_at: string
+  accepted_at?: string
+}
+
+export interface RematchRequestedEvent {
+  type: 'rematch_requested'
+  payload: RematchRequest
+}
+
+export interface RematchAcceptedEvent {
+  type: 'rematch_accepted'
+  payload: Game
+}
+
+export type WebSocketEvent = RematchRequestedEvent | RematchAcceptedEvent
 
 export interface Move {
   game_id: string

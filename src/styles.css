@@ -164,6 +164,14 @@ form small { display: block; color: #55574f; margin-top: 7px; font-size: 9px; }
 .result-players { margin: 24px 0 0; display: flex; gap: 18px; flex-wrap: wrap; }
 .result-players span { color: var(--muted); padding: 7px 0; font-size: 10px; }
 .result-players .champion { color: var(--green); }
+.result-actions { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
+.result-actions .text-button { margin-top: 28px; }
+.rematch-status { margin-top: 28px; padding: 12px 0; color: var(--muted); font-size: 11px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); }
+.rematch-pulse { width: 7px; height: 7px; background: var(--green); }
+.rematch-confirmation { margin-top: 25px; padding-top: 18px; border-top: 1px solid var(--line); }
+.rematch-confirmation > p { margin: 0; color: var(--ink); font-size: 11px; }
+.rematch-actions { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+.rematch-actions .primary-button, .rematch-actions .text-button { margin-top: 18px; }
 
 @media (max-width: 760px) {
   .site-header { height: 50px; }
