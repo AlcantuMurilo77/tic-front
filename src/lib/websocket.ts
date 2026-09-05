@@ -1,10 +1,16 @@
 import type { Game, Move, RematchRequest, WebSocketEvent } from '../types/game'
 
-const WS_URL = import.meta.env.VITE_WS_URL || (
+const configuredWsUrl = import.meta.env.VITE_WS_URL || (
   import.meta.env.DEV
     ? 'ws://localhost:8080/ws'
     : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 )
+
+const wsUrl = new URL(configuredWsUrl, window.location.origin)
+if (window.location.protocol === 'https:' && wsUrl.protocol === 'ws:') {
+  wsUrl.protocol = 'wss:'
+}
+const WS_URL = wsUrl.toString()
 
 interface GameSocketHandlers {
   onGame: (game: Game) => void
