@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 
-type Theme = 'dark' | 'terminal' | 'light' | 'purple'
+type Theme = 'blue' | 'graphite' | 'red'
 
 declare global {
   interface Window {
@@ -11,12 +11,12 @@ declare global {
 }
 
 const savedTheme = localStorage.getItem('tic:theme')
-const availableThemes: Theme[] = ['dark', 'terminal', 'light', 'purple']
-const theme = ref<Theme>(availableThemes.includes(savedTheme as Theme) ? savedTheme as Theme : 'dark')
+const availableThemes: Theme[] = ['blue', 'graphite', 'red']
+const theme = ref<Theme>(availableThemes.includes(savedTheme as Theme) ? savedTheme as Theme : 'blue')
 
 window.roxo = () => {
-  theme.value = 'purple'
-  return 'tema roxo ativado \uD83D\uDC7E'
+  theme.value = 'red'
+  return 'caneta vermelha ativada ✎'
 }
 
 onBeforeUnmount(() => {
@@ -37,9 +37,9 @@ watch(theme, (value) => {
         <span>TIC</span>
       </RouterLink>
       <nav class="theme-switcher" aria-label="Tema da interface">
-        <button :class="{ active: theme === 'dark' }" @click="theme = 'dark'">escuro</button>
-        <button :class="{ active: theme === 'terminal' }" @click="theme = 'terminal'">terminal</button>
-        <button :class="{ active: theme === 'light' }" @click="theme = 'light'">claro <span>(para psicopatas)</span></button>
+        <button :class="{ active: theme === 'blue' }" @click="theme = 'blue'">azul</button>
+        <button :class="{ active: theme === 'graphite' }" @click="theme = 'graphite'">grafite</button>
+        <button :class="{ active: theme === 'red' }" @click="theme = 'red'">vermelha</button>
       </nav>
     </header>
     <main><RouterView /></main>

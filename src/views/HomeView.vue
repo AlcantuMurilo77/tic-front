@@ -55,7 +55,6 @@ function continueSession() { router.push(destinationAfterLogin()) }
     </div>
 
     <div class="panel setup-card">
-      <div class="panel-number">01</div>
       <h2>Quem vai jogar?</h2>
       <p>Seu nome aparecerá para o outro jogador durante a partida.</p>
 
