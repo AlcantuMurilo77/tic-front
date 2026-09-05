@@ -43,6 +43,5 @@ watch(theme, (value) => {
       </nav>
     </header>
     <main><RouterView /></main>
-    <footer>tic-tac-toe</footer>
   </div>
 </template>

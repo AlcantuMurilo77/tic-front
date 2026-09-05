@@ -47,7 +47,6 @@ function continueSession() { router.push(destinationAfterLogin()) }
 <template>
   <section class="hero page-grid">
     <div class="hero-copy">
-      <p class="eyebrow">TIC-TAC-TOE</p>
       <h1>Jogo da<br><em>velha.</em></h1>
       <p class="hero-subtitle">Crie uma sala, envie o link e jogue.</p>
       <div class="mini-board" aria-hidden="true">
@@ -57,7 +56,6 @@ function continueSession() { router.push(destinationAfterLogin()) }
 
     <div class="panel setup-card">
       <div class="panel-number">01</div>
-      <p class="eyebrow">PREPARE-SE</p>
       <h2>Quem vai jogar?</h2>
       <p>Seu nome aparecerá para o outro jogador durante a partida.</p>
 
@@ -68,8 +66,7 @@ function continueSession() { router.push(destinationAfterLogin()) }
         <label for="player-name">Seu nome</label>
         <input id="player-name" v-model="name" maxlength="32" autocomplete="name" placeholder="Ex.: Marina" autofocus />
         <label for="country">País</label>
-        <input id="country" v-model="country" maxlength="2" aria-describedby="country-help" />
-        <small id="country-help">Código de duas letras, como BR ou PT.</small>
+        <input id="country" v-model="country" maxlength="2" />
         <button class="primary-button" :disabled="!valid || loading" type="submit">
           {{ loading ? 'Criando jogador…' : 'Começar a jogar' }} <span>↗</span>
         </button>

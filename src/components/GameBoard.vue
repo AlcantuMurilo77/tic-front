@@ -26,8 +26,12 @@ const emit = defineEmits<{ move: [row: number, col: number] }>()
         role="gridcell"
         @click="emit('move', rowIndex, colIndex)"
       >
-        <span v-if="cell === 1" aria-hidden="true">×</span>
-        <span v-else-if="cell === 2" aria-hidden="true">○</span>
+        <svg v-if="cell === 1" class="board-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M22 22 78 78M78 22 22 78" />
+        </svg>
+        <svg v-else-if="cell === 2" class="board-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="31" />
+        </svg>
       </button>
     </template>
   </div>

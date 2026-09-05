@@ -271,14 +271,18 @@ async function enterNewGame(newGame: Game) {
     <div class="game-topbar">
       <button class="back-button" @click="goLobby">← <span>Lobby</span></button>
       <div class="room-code"><small>SALA</small><strong>{{ activeGameId.slice(0, 8) }}</strong></div>
-      <span class="connection" :class="{ online: socketConnected }"><i></i>{{ socketConnected ? 'ao vivo' : 'offline' }}</span>
     </div>
 
     <AppNotice v-if="error" :message="error" kind="error" />
 
     <div v-if="isWaiting" class="waiting-layout">
       <div class="waiting-art" aria-hidden="true">
-        <div class="radar"><span>×</span><i></i><i></i><i></i></div>
+        <small v-if="game && game.user_x === user.id">você joga de:</small>
+        <div class="radar">
+          <svg viewBox="0 0 100 100">
+            <path d="M22 22 78 78M78 22 22 78" />
+          </svg>
+        </div>
       </div>
 
       <article v-if="game && game.user_x === user.id" class="panel waiting-card">
@@ -319,7 +323,6 @@ async function enterNewGame(newGame: Game) {
       </div>
 
       <GameBoard :board="game.board || emptyBoard" :disabled="!isMyTurn || movePending || isEnded || !socketConnected" @move="play" />
-      <p class="board-hint">{{ isEnded ? 'A partida terminou.' : isMyTurn ? 'Escolha uma casa vazia.' : 'Aguarde a jogada do adversário.' }}</p>
     </div>
 
     <div v-if="game && isEnded" class="result-overlay">
